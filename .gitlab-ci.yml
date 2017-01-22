@@ -1,0 +1,42 @@
+#image: travisci/ci-garnet:packer-1512502276-986baf0
+#image: pypy:latest
+image: python:latest
+
+build:
+  tags:
+    - shared
+  stage: build
+  variables:
+    GIT_DEPTH: "1"
+
+  before_script:
+    - source ./.ci/pythonStdlibFixes.sh
+    - pip3 install --upgrade setuptools
+    - pip3 install --upgrade pandas numpy
+    - pip3 install --upgrade coveralls setuptools_scm
+  
+  script:
+    - python3 setup.py bdist_wheel
+    - coverage run --source=Chassis setup.py test
+    - pip3 install --upgrade ./dist/*.whl
+  cache:
+    paths:
+      - /usr/local/site-packages
+  artifacts:
+    paths:
+      - dist
+
+sast:
+  tags:
+    - shared
+  image: docker:latest
+  variables:
+    DOCKER_DRIVER: overlay2
+  allow_failure: true
+  services:
+    - docker:dind
+  script:
+    - docker run --env SAST_CONFIDENCE_LEVEL=5 --volume "$PWD:/code" --volume /var/run/docker.sock:/var/run/docker.sock "registry.gitlab.com/gitlab-org/security-products/sast:latest" /app/bin/run /code
+  artifacts:
+    paths:
+     - gl-sast-report.json
